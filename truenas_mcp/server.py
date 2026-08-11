@@ -525,7 +525,7 @@ def main() -> None:
     if TokenAuthMiddleware:
         starlette_app.add_middleware(TokenAuthMiddleware)
 
-    print(f"truenas-mcp v0.2.2 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.2.3 starting on http://{host}:{port}{path}", flush=True)
     print(f"  k3s binary: {K3S}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
