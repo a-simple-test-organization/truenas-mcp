@@ -41,16 +41,30 @@ MIDCLT = _find_binary(
 
 # Safe resource types for kubectl get (read-only, no secrets)
 ALLOWED_GET_TYPES = frozenset({
-    "pods", "po", "deployments", "deploy", "statefulsets", "sts", "daemonsets", "ds",
-    "nodes", "no", "namespaces", "ns", "services", "svc", "ingresses", "ing",
-    "persistentvolumes", "pv", "persistentvolumeclaims", "pvc",
-    "configmaps", "cm", "events", "ev", "jobs", "cronjobs", "cj",
-    "endpoints", "ep", "horizontalpodautoscalers", "hpa",
-    "replicasets", "rs", "networkpolicies", "netpol",
-    "storageclasses", "sc", "serviceaccounts", "sa",
+    "pods", "po", "pod",
+    "deployments", "deploy", "deployment",
+    "statefulsets", "sts", "statefulset",
+    "daemonsets", "ds", "daemonset",
+    "nodes", "no", "node",
+    "namespaces", "ns", "namespace",
+    "services", "svc", "service",
+    "ingresses", "ing", "ingress",
+    "persistentvolumes", "pv",
+    "persistentvolumeclaims", "pvc",
+    "configmaps", "cm", "configmap",
+    "events", "ev", "event",
+    "jobs", "job", "cronjobs", "cj", "cronjob",
+    "endpoints", "ep",
+    "horizontalpodautoscalers", "hpa",
+    "replicasets", "rs", "replicaset",
+    "networkpolicies", "netpol", "networkpolicy",
+    "storageclasses", "sc", "storageclass",
+    "serviceaccounts", "sa", "serviceaccount",
     "customresourcedefinitions", "crd",
-    "certificates", "cert", "issuers", "clusterissuers", "orders", "challenges",
-    "helmcharts", "helmreleases",
+    "certificates", "cert", "certificate",
+    "issuers", "issuer", "clusterissuers", "clusterissuer",
+    "orders", "order", "challenges", "challenge",
+    "helmcharts", "helmrelease",
 })
 
 BLOCKED_GET_TYPES = frozenset({"secrets", "secret"})
@@ -58,15 +72,28 @@ BLOCKED_GET_TYPES = frozenset({"secrets", "secret"})
 ALLOWED_DESCRIBE_TYPES = ALLOWED_GET_TYPES
 
 RESOURCE_ALIASES = {
-    "po": "pods", "deploy": "deployments", "sts": "statefulsets",
-    "ds": "daemonsets", "no": "nodes", "ns": "namespaces",
-    "svc": "services", "ing": "ingresses", "pv": "persistentvolumes",
-    "pvc": "persistentvolumeclaims", "cm": "configmaps", "ev": "events",
-    "cj": "cronjobs", "ep": "endpoints", "hpa": "horizontalpodautoscalers",
-    "rs": "replicasets", "netpol": "networkpolicies",
-    "sc": "storageclasses", "sa": "serviceaccounts",
+    "po": "pods", "pod": "pods",
+    "deploy": "deployments", "deployment": "deployments",
+    "sts": "statefulsets", "statefulset": "statefulsets",
+    "ds": "daemonsets", "daemonset": "daemonsets",
+    "no": "nodes", "node": "nodes",
+    "ns": "namespaces", "namespace": "namespaces",
+    "svc": "services", "service": "services",
+    "ing": "ingresses", "ingress": "ingresses",
+    "pv": "persistentvolumes",
+    "pvc": "persistentvolumeclaims",
+    "cm": "configmaps", "configmap": "configmaps",
+    "ev": "events", "event": "events",
+    "cj": "cronjobs", "cronjob": "cronjobs",
+    "ep": "endpoints",
+    "hpa": "horizontalpodautoscalers",
+    "rs": "replicasets", "replicaset": "replicasets",
+    "netpol": "networkpolicies", "networkpolicy": "networkpolicies",
+    "sc": "storageclasses", "storageclass": "storageclasses",
+    "sa": "serviceaccounts", "serviceaccount": "serviceaccounts",
     "crd": "customresourcedefinitions",
-    "cert": "certificates",
+    "cert": "certificates", "certificate": "certificates",
+    "helmrelease": "helmreleases",
 }
 
 # whitelist of midclt calls — verified working on TrueNAS SCALE 23.10.2
@@ -453,7 +480,7 @@ def main() -> None:
     port = int(os.environ.get("MCP_PORT", "8000"))
     path = os.environ.get("MCP_PATH", "/mcp")
 
-    print(f"truenas-mcp v0.1.3 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.1.4 starting on http://{host}:{port}{path}", flush=True)
     print(f"  k3s binary: {K3S}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
