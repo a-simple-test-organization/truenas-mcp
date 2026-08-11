@@ -1,0 +1,29 @@
+[Unit]
+Description=TrueNAS MCP Server — read-only k3s & TrueNAS API debug tools
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/mcp/bin/python -m truenas_mcp.server
+Environment=PYTHONUNBUFFERED=1
+Environment=MCP_HOST=0.0.0.0
+Environment=MCP_PORT=38888
+Environment=MCP_PATH=/mcp
+Environment=MCP_TOKEN=
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=truenas-mcp
+
+# Security: restrict but allow k3s/midclt
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

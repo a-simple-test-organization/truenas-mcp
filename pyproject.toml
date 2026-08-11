@@ -1,10 +1,12 @@
 [project]
 name = "truenas-mcp"
-version = "0.1.4"
+version = "0.2.0"
 description = "Read-only MCP server for TrueNAS Scale — k3s debugging and system introspection"
 requires-python = ">=3.10"
 dependencies = [
     "mcp[cli]>=2.0.0",
+    "uvicorn>=0.30",
+    "starlette>=0.38",
 ]
 
 [project.scripts]

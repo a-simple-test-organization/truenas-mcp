@@ -475,16 +475,56 @@ def _closest_match(text: str, candidates: frozenset[str]) -> str | None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """Entry point: run the MCP server via Streamable HTTP."""
+    """Entry point: run the MCP server via Streamable HTTP with optional token auth."""
+    import uvicorn
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
     host = os.environ.get("MCP_HOST", "0.0.0.0")
     port = int(os.environ.get("MCP_PORT", "8000"))
     path = os.environ.get("MCP_PATH", "/mcp")
+    token = os.environ.get("MCP_TOKEN", "").strip()
 
-    print(f"truenas-mcp v0.1.4 starting on http://{host}:{port}{path}", flush=True)
+    if token:
+        class TokenAuthMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request: Request, call_next):
+                # Skip health check
+                if request.url.path.rstrip("/") in ("/health", "/healthz"):
+                    return await call_next(request)
+                auth = request.headers.get("Authorization", "")
+                expected = f"Bearer {token}"
+                if auth != expected:
+                    return JSONResponse({"error": "unauthorized"}, status_code=401)
+                return await call_next(request)
+
+        print(f"  auth: token enabled ({'*' * 8}{token[-4:] if len(token) > 4 else ''})", flush=True)
+    else:
+        TokenAuthMiddleware = None  # type: ignore[assignment]
+        print(f"  auth: DISABLED (set MCP_TOKEN env var to enable)", flush=True)
+
+    starlette_app = mcp.streamable_http_app(
+        streamable_http_path=path,
+        json_response=False,
+        stateless_http=False,
+    )
+
+    # Add /health endpoint
+    async def health(request):
+        return JSONResponse({"status": "ok", "auth_enabled": bool(token)})
+    starlette_app.add_route("/health", health, methods=["GET"])
+
+    if TokenAuthMiddleware:
+        starlette_app.add_middleware(TokenAuthMiddleware)
+
+    print(f"truenas-mcp v0.2.0 starting on http://{host}:{port}{path}", flush=True)
     print(f"  k3s binary: {K3S}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
-    mcp.run(transport="streamable-http", host=host, port=port, streamable_http_path=path)
+    config = uvicorn.Config(starlette_app, host=host, port=port, log_level="info")
+    server = uvicorn.Server(config)
+    import anyio
+    anyio.run(server.serve)
 
 
 if __name__ == "__main__":
