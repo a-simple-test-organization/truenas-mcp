@@ -69,41 +69,39 @@ RESOURCE_ALIASES = {
     "cert": "certificates",
 }
 
-# whitelist of midclt calls
+# whitelist of midclt calls — verified working on TrueNAS SCALE 23.10.2
 ALLOWED_MIDCLT = frozenset({
-    "app.query",
+    # Apps / Charts
     "app.config",
     "app.available_versions",
-    "app.get_instance",
-    "app.get_logs",
-    "app.container_logs",
+    "app.get_instance",           # needs args: id
     "chart.release.query",
-    "chart.release.get_instance",
-    "chart.release.events",
-    "chart.release.pod_logs",
-    "chart.release.pod_status",
+    "chart.release.get_instance", # needs args: id
+    "chart.release.events",       # needs args: release_name
+    "chart.release.pod_status",   # needs args: release_name
+    "chart.release.pod_logs",     # needs args: release_name, pod_name, tail_lines, ...
+    # Kubernetes
     "kubernetes.config",
     "kubernetes.node_ip",
     "kubernetes.status",
     "kubernetes.events",
-    "kubernetes.get_nodes",
-    "kubernetes.get_pods",
-    "kubernetes.get_pod_logs",
-    "kubernetes.get_namespaces",
+    # System
     "system.info",
     "system.version",
     "system.cpu_info",
-    "system.cpu_temperatures",
-    "system.disk_info",
-    "system.gpu_info",
     "system.mem_info",
+    # Storage
     "pool.query",
     "pool.dataset.query",
+    # Network
     "network.configuration.config",
+    # Services
     "service.query",
+    # Alerts
     "alert.list",
+    # VMs
     "vm.query",
-    "container.query",
+    # Catalogs
     "catalog.query",
 })
 
@@ -319,21 +317,22 @@ async def kubectl_top_nodes() -> str:
 async def midclt_call(method: str) -> str:
     """Call a read-only TrueNAS API method via midclt.
 
-    Whistlisted methods cover apps, kubernetes, system info, pools, network,
-    alerts, VMs, containers, and catalogs. Example methods:
-      - app.query              — list all installed applications
+    Whistlisted methods: apps, charts, kubernetes, system info, pools,
+    network, services, alerts, VMs, catalogs. Verified on 23.10.2.
+    Example methods:
+      - chart.release.query    — list all installed app releases
       - app.config             — app configuration
-      - app.get_instance       — single app detail
-      - chart.release.query    — Helm releases
-      - chart.release.pod_status — pod status for an app
+      - app.get_instance       — single app detail (needs id arg, use midclt_call_arg)
+      - chart.release.pod_status — pod status for an app (needs release_name arg)
+      - chart.release.events   — app events (needs release_name arg)
       - kubernetes.status      — k8s cluster status
-      - kubernetes.get_pods    — all pods (cluster view)
       - system.info            — TrueNAS system info
       - pool.query             — list storage pools
       - alert.list             — current alerts
+      - vm.query               — list VMs
 
     Args:
-        method: The midclt method name (e.g. 'app.query', 'system.info').
+        method: The midclt method name (e.g. 'chart.release.query', 'system.info').
 
     Returns:
         JSON string from midclt.
@@ -454,7 +453,7 @@ def main() -> None:
     port = int(os.environ.get("MCP_PORT", "8000"))
     path = os.environ.get("MCP_PATH", "/mcp")
 
-    print(f"truenas-mcp v0.1.2 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.1.3 starting on http://{host}:{port}{path}", flush=True)
     print(f"  k3s binary: {K3S}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
