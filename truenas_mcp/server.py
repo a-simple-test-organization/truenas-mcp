@@ -22,8 +22,22 @@ from mcp.server import MCPServer
 # Helpers
 # ---------------------------------------------------------------------------
 
-K3S = os.environ.get("K3S_BIN", "/usr/local/bin/k3s")
-MIDCLT = os.environ.get("MIDCLT_BIN", "/usr/local/bin/midclt")
+def _find_binary(name: str, env_var: str, fallbacks: list[str]) -> str:
+    """Resolve binary path: env var > PATH > fallback list."""
+    if env_path := os.environ.get(env_var):
+        return env_path
+    if shutil.which(name):
+        return shutil.which(name)  # type: ignore[return-value]
+    for p in fallbacks:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    return fallbacks[0]  # best-effort, will fail with clear error
+
+K3S = _find_binary("k3s", "K3S_BIN", ["/usr/local/bin/k3s", "/usr/bin/k3s"])
+MIDCLT = _find_binary(
+    "midclt", "MIDCLT_BIN",
+    ["/usr/local/bin/midclt", "/usr/bin/midclt", "/usr/local/sbin/midclt"]
+)
 
 # Safe resource types for kubectl get (read-only, no secrets)
 ALLOWED_GET_TYPES = frozenset({
@@ -440,7 +454,7 @@ def main() -> None:
     port = int(os.environ.get("MCP_PORT", "8000"))
     path = os.environ.get("MCP_PATH", "/mcp")
 
-    print(f"truenas-mcp v0.1.0 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.1.2 starting on http://{host}:{port}{path}", flush=True)
     print(f"  k3s binary: {K3S}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
