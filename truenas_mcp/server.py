@@ -514,10 +514,14 @@ def main() -> None:
         return JSONResponse({"status": "ok", "auth_enabled": bool(token)})
     starlette_app.add_route("/health", health, methods=["GET"])
 
+    # Allow connections from any host (MCP clients connect via IP, not hostname)
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+    starlette_app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+
     if TokenAuthMiddleware:
         starlette_app.add_middleware(TokenAuthMiddleware)
 
-    print(f"truenas-mcp v0.2.0 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.2.1 starting on http://{host}:{port}{path}", flush=True)
     print(f"  k3s binary: {K3S}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
