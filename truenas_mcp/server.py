@@ -439,6 +439,11 @@ def main() -> None:
     host = os.environ.get("MCP_HOST", "0.0.0.0")
     port = int(os.environ.get("MCP_PORT", "8000"))
     path = os.environ.get("MCP_PATH", "/mcp")
+
+    print(f"truenas-mcp v0.1.0 starting on http://{host}:{port}{path}", flush=True)
+    print(f"  k3s binary: {K3S}", flush=True)
+    print(f"  midclt binary: {MIDCLT}", flush=True)
+
     mcp.run(transport="streamable-http", host=host, port=port, streamable_http_path=path)
 
 
