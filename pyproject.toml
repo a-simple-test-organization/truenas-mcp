@@ -1,0 +1,15 @@
+[project]
+name = "truenas-mcp"
+version = "0.1.0"
+description = "Read-only MCP server for TrueNAS Scale — k3s debugging and system introspection"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=2.0.0",
+]
+
+[project.scripts]
+truenas-mcp = "truenas_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
