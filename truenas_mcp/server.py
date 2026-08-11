@@ -503,10 +503,18 @@ def main() -> None:
         TokenAuthMiddleware = None  # type: ignore[assignment]
         print(f"  auth: DISABLED (set MCP_TOKEN env var to enable)", flush=True)
 
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=False,
+    )
+
     starlette_app = mcp.streamable_http_app(
         streamable_http_path=path,
         json_response=False,
         stateless_http=False,
+        host=host,
+        transport_security=transport_security,
     )
 
     # Add /health endpoint
@@ -514,24 +522,10 @@ def main() -> None:
         return JSONResponse({"status": "ok", "auth_enabled": bool(token)})
     starlette_app.add_route("/health", health, methods=["GET"])
 
-    # Allow connections from any host (MCP clients connect via IP, not hostname).
-    # Starlette's TrustedHostMiddleware with "*" doesn't match IP:port format,
-    # so we use a raw ASGI middleware that rewrites the Host header.
-    class _HostFixMiddleware:
-        def __init__(self, app):
-            self.app = app
-        async def __call__(self, scope, receive, send):
-            if scope["type"] == "http":
-                scope["headers"] = [
-                    (k, v) for k, v in scope["headers"] if k != b"host"
-                ] + [(b"host", b"truenas-mcp")]
-            await self.app(scope, receive, send)
-    starlette_app.add_middleware(_HostFixMiddleware)
-
     if TokenAuthMiddleware:
         starlette_app.add_middleware(TokenAuthMiddleware)
 
-    print(f"truenas-mcp v0.2.1 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.2.2 starting on http://{host}:{port}{path}", flush=True)
     print(f"  k3s binary: {K3S}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
