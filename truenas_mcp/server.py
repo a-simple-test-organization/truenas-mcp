@@ -436,7 +436,10 @@ def _closest_match(text: str, candidates: frozenset[str]) -> str | None:
 
 def main() -> None:
     """Entry point: run the MCP server via Streamable HTTP."""
-    mcp.run()
+    host = os.environ.get("MCP_HOST", "0.0.0.0")
+    port = int(os.environ.get("MCP_PORT", "8000"))
+    path = os.environ.get("MCP_PATH", "/mcp")
+    mcp.run(transport="streamable-http", host=host, port=port, streamable_http_path=path)
 
 
 if __name__ == "__main__":
