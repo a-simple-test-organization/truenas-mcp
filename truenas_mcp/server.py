@@ -514,9 +514,19 @@ def main() -> None:
         return JSONResponse({"status": "ok", "auth_enabled": bool(token)})
     starlette_app.add_route("/health", health, methods=["GET"])
 
-    # Allow connections from any host (MCP clients connect via IP, not hostname)
-    from starlette.middleware.trustedhost import TrustedHostMiddleware
-    starlette_app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+    # Allow connections from any host (MCP clients connect via IP, not hostname).
+    # Starlette's TrustedHostMiddleware with "*" doesn't match IP:port format,
+    # so we use a raw ASGI middleware that rewrites the Host header.
+    class _HostFixMiddleware:
+        def __init__(self, app):
+            self.app = app
+        async def __call__(self, scope, receive, send):
+            if scope["type"] == "http":
+                scope["headers"] = [
+                    (k, v) for k, v in scope["headers"] if k != b"host"
+                ] + [(b"host", b"truenas-mcp")]
+            await self.app(scope, receive, send)
+    starlette_app.add_middleware(_HostFixMiddleware)
 
     if TokenAuthMiddleware:
         starlette_app.add_middleware(TokenAuthMiddleware)
