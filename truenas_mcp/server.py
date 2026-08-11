@@ -64,7 +64,7 @@ ALLOWED_GET_TYPES = frozenset({
     "certificates", "cert", "certificate",
     "issuers", "issuer", "clusterissuers", "clusterissuer",
     "orders", "order", "challenges", "challenge",
-    "helmcharts", "helmrelease",
+    "helmcharts", "helmrelease", "helmreleases",
 })
 
 BLOCKED_GET_TYPES = frozenset({"secrets", "secret"})
@@ -78,6 +78,7 @@ RESOURCE_ALIASES = {
     "ds": "daemonsets", "daemonset": "daemonsets",
     "no": "nodes", "node": "nodes",
     "ns": "namespaces", "namespace": "namespaces",
+    "job": "jobs",
     "svc": "services", "service": "services",
     "ing": "ingresses", "ingress": "ingresses",
     "pv": "persistentvolumes",
@@ -94,6 +95,7 @@ RESOURCE_ALIASES = {
     "crd": "customresourcedefinitions",
     "cert": "certificates", "certificate": "certificates",
     "helmrelease": "helmreleases",
+    "helmreleases": "helmreleases",
 }
 
 # whitelist of midclt calls — verified working on TrueNAS SCALE 23.10.2
