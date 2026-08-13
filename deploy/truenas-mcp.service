@@ -1,5 +1,5 @@
 [Unit]
-Description=TrueNAS MCP Server — read-only k3s & TrueNAS API debug tools
+Description=TrueNAS MCP Server — read-only Docker & TrueNAS API debug tools
 After=network-online.target
 Wants=network-online.target
 
@@ -17,7 +17,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=truenas-mcp
 
-# Security: restrict but allow k3s/midclt
+# Security: restrict but allow docker/midclt
 NoNewPrivileges=yes
 ProtectHome=yes
 ProtectKernelTunables=yes

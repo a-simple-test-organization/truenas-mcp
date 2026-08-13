@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0] — 2026-08-13
+
+### Changed
+- Target TrueNAS SCALE 25.04+ (native Docker, k3s removed)
+- Replaced all kubectl tools with read-only Docker CLI tools:
+  `docker_ps`, `docker_images`, `docker_inspect`, `docker_logs`, `docker_stats`,
+  `docker_network_ls`, `docker_volume_ls`, `docker_compose_ls`, `docker_system_df`,
+  `docker_status_summary`
+- Updated `ALLOWED_MIDCLT` whitelist for 25.04:
+  - Added: `app.query`, `app.image.query`, `docker.state`, `docker.events`
+  - Removed: all `chart.release.*`, all `kubernetes.*`, `app.config`,
+    `app.available_versions`, `app.get_instance`
+- Docker binary resolved via `DOCKER_BIN` env + PATH + fallbacks (like `_find_binary`)
+- Enforced read-only docker subcommands; write operations (run/rm/rmi/pull/exec, ...) blocked
+
+### Removed
+- k3s / kubectl tools and resource-type whitelists
+
 ## [0.2.3] — 2026-08-11
 
 ### Fixed

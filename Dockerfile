@@ -11,10 +11,9 @@ COPY truenas_mcp/ ./truenas_mcp/
 
 RUN pip install --no-cache-dir .
 
-# We need k3s and midclt from the host — mount them at runtime
-ENV K3S_BIN=/host/bin/k3s
+# We need the docker CLI and midclt from the host — mount them at runtime
+ENV DOCKER_BIN=/host/bin/docker
 ENV MIDCLT_BIN=/host/bin/midclt
-ENV KUBECONFIG=/host/kube/config
 ENV MCP_PORT=8000
 ENV MCP_HOST=0.0.0.0
 

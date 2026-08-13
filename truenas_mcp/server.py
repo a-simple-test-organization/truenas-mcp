@@ -1,20 +1,16 @@
 """
 Read-only MCP server for TrueNAS Scale.
 
-Runs locally on TrueNAS; uses `k3s kubectl` and `midclt call` (no auth needed).
-Every tool is read-only — no apply/delete/create/exec.
+Runs locally on TrueNAS; uses the native `docker` CLI and `midclt call`
+(no auth needed). Every tool is read-only — no run/rm/pull/exec, no
+mutating midclt methods.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import os
-import shlex
 import shutil
-import subprocess
-import sys
-from pathlib import Path
-from typing import Annotated
 
 from mcp.server import MCPServer
 
@@ -33,87 +29,51 @@ def _find_binary(name: str, env_var: str, fallbacks: list[str]) -> str:
             return p
     return fallbacks[0]  # best-effort, will fail with clear error
 
-K3S = _find_binary("k3s", "K3S_BIN", ["/usr/local/bin/k3s", "/usr/bin/k3s"])
+DOCKER = _find_binary(
+    "docker", "DOCKER_BIN",
+    ["/usr/bin/docker", "/usr/local/bin/docker", "/usr/local/sbin/docker"]
+)
 MIDCLT = _find_binary(
     "midclt", "MIDCLT_BIN",
     ["/usr/local/bin/midclt", "/usr/bin/midclt", "/usr/local/sbin/midclt"]
 )
 
-# Safe resource types for kubectl get (read-only, no secrets)
-ALLOWED_GET_TYPES = frozenset({
-    "pods", "po", "pod",
-    "deployments", "deploy", "deployment",
-    "statefulsets", "sts", "statefulset",
-    "daemonsets", "ds", "daemonset",
-    "nodes", "no", "node",
-    "namespaces", "ns", "namespace",
-    "services", "svc", "service",
-    "ingresses", "ing", "ingress",
-    "persistentvolumes", "pv",
-    "persistentvolumeclaims", "pvc",
-    "configmaps", "cm", "configmap",
-    "events", "ev", "event",
-    "jobs", "job", "cronjobs", "cj", "cronjob",
-    "endpoints", "ep",
-    "horizontalpodautoscalers", "hpa",
-    "replicasets", "rs", "replicaset",
-    "networkpolicies", "netpol", "networkpolicy",
-    "storageclasses", "sc", "storageclass",
-    "serviceaccounts", "sa", "serviceaccount",
-    "customresourcedefinitions", "crd",
-    "certificates", "cert", "certificate",
-    "issuers", "issuer", "clusterissuers", "clusterissuer",
-    "orders", "order", "challenges", "challenge",
-    "helmcharts", "helmrelease", "helmreleases",
+# Read-only docker subcommands we are willing to run. Anything else (run, rm,
+# rmi, pull, exec, stop, kill, build, push, ...) is rejected up front.
+DOCKER_READ_ONLY_SUBCOMMANDS = frozenset({
+    "ps", "images", "inspect", "logs", "stats",
+    "network", "volume", "compose", "system",
 })
 
-BLOCKED_GET_TYPES = frozenset({"secrets", "secret"})
+# Docker subcommands that take a further read-only action (network ls,
+# volume ls, system df, compose ls). We validate the full argv prefix.
+_DOCKER_ALLOWED_ARGS = frozenset({
+    "ps", "images", "inspect", "logs", "stats",
+    "network ls",
+    "volume ls",
+    "compose ls",
+    "system df",
+})
 
-ALLOWED_DESCRIBE_TYPES = ALLOWED_GET_TYPES
 
-RESOURCE_ALIASES = {
-    "po": "pods", "pod": "pods",
-    "deploy": "deployments", "deployment": "deployments",
-    "sts": "statefulsets", "statefulset": "statefulsets",
-    "ds": "daemonsets", "daemonset": "daemonsets",
-    "no": "nodes", "node": "nodes",
-    "ns": "namespaces", "namespace": "namespaces",
-    "job": "jobs",
-    "svc": "services", "service": "services",
-    "ing": "ingresses", "ingress": "ingresses",
-    "pv": "persistentvolumes",
-    "pvc": "persistentvolumeclaims",
-    "cm": "configmaps", "configmap": "configmaps",
-    "ev": "events", "event": "events",
-    "cj": "cronjobs", "cronjob": "cronjobs",
-    "ep": "endpoints",
-    "hpa": "horizontalpodautoscalers",
-    "rs": "replicasets", "replicaset": "replicasets",
-    "netpol": "networkpolicies", "networkpolicy": "networkpolicies",
-    "sc": "storageclasses", "storageclass": "storageclasses",
-    "sa": "serviceaccounts", "serviceaccount": "serviceaccounts",
-    "crd": "customresourcedefinitions",
-    "cert": "certificates", "certificate": "certificates",
-    "helmrelease": "helmreleases",
-    "helmreleases": "helmreleases",
-}
+def _docker_guard(subcommand: str) -> None:
+    """Reject any docker invocation that is not on the read-only allowlist."""
+    subcommand = subcommand.strip()
+    if subcommand not in _DOCKER_ALLOWED_ARGS:
+        raise ValueError(
+            f"Docker subcommand '{subcommand}' is not read-only / not allowed. "
+            f"Allowed: {', '.join(sorted(_DOCKER_ALLOWED_ARGS))}"
+        )
 
-# whitelist of midclt calls — verified working on TrueNAS SCALE 23.10.2
+
+# whitelist of midclt calls — verified working on TrueNAS SCALE 25.04
 ALLOWED_MIDCLT = frozenset({
-    # Apps / Charts
-    "app.config",
-    "app.available_versions",
-    "app.get_instance",           # needs args: id
-    "chart.release.query",
-    "chart.release.get_instance", # needs args: id
-    "chart.release.events",       # needs args: release_name
-    "chart.release.pod_status",   # needs args: release_name
-    "chart.release.pod_logs",     # needs args: release_name, pod_name, tail_lines, ...
-    # Kubernetes
-    "kubernetes.config",
-    "kubernetes.node_ip",
-    "kubernetes.status",
-    "kubernetes.events",
+    # Apps (Docker-backed in 25.04)
+    "app.query",                 # list installed app releases (AppEntry)
+    "app.image.query",           # docker images
+    # Docker
+    "docker.state",              # docker daemon / service state
+    "docker.events",             # recent docker events
     # System
     "system.info",
     "system.version",
@@ -133,23 +93,6 @@ ALLOWED_MIDCLT = frozenset({
     # Catalogs
     "catalog.query",
 })
-
-
-def _resolve_resource(rtype: str) -> str:
-    """Resolve shorthand to full resource type."""
-    rtype = rtype.lower().strip()
-    return RESOURCE_ALIASES.get(rtype, rtype)
-
-
-def _check_get_type(rtype: str) -> None:
-    resolved = _resolve_resource(rtype)
-    if resolved in BLOCKED_GET_TYPES:
-        raise ValueError(f"Access to '{rtype}' is denied (read-only policy)")
-    if resolved not in ALLOWED_GET_TYPES:
-        raise ValueError(
-            f"Unknown or unsupported resource type '{rtype}'. "
-            f"Allowed: {', '.join(sorted(ALLOWED_GET_TYPES))}"
-        )
 
 
 async def _run(args: list[str], timeout: int = 30) -> str:
@@ -173,168 +116,121 @@ async def _run(args: list[str], timeout: int = 30) -> str:
 
 
 mcp = MCPServer("truenas-mcp")
-OutputFormat = Annotated[str, "Output format: plain, json, yaml"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# k3s / Kubernetes tools
+# Docker tools
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 @mcp.tool()
-async def kubectl_get(
-    resource_type: str,
-    namespace: str | None = None,
-    output: str = "json",
-    selector: str | None = None,
-    all_namespaces: bool = False,
-) -> str:
-    """Read-only kubectl get for debugging.
+async def docker_ps(all: bool = True) -> str:
+    """List containers (defaults to `docker ps -a`).
 
     Args:
-        resource_type: Kubernetes resource type — pods, deployments, statefulsets,
-            daemonsets, nodes, namespaces, services, ingresses, pv, pvc,
-            configmaps, events, jobs, cronjobs, endpoints, hpa, replicasets,
-            networkpolicies, storageclasses, serviceaccounts, crd.
-        namespace: Limit to namespace (default app namespace on TrueNAS is usually 'ix-*').
-            Leave empty + all_namespaces=False to use current-context default.
-        output: json (default), yaml, or wide.
-        selector: Label selector, e.g. 'app=plex'.
-        all_namespaces: List across all namespaces.
+        all: Show all containers, including stopped ones (default True).
     """
-    _check_get_type(resource_type)
-    rtype = _resolve_resource(resource_type)
-    args = [K3S, "kubectl", "get", rtype]
-    if all_namespaces:
-        args.append("--all-namespaces")
-    elif namespace:
-        args.extend(["-n", namespace])
-    if selector:
-        args.extend(["-l", selector])
-    if output == "json":
-        args.extend(["-o", "json"])
-    elif output == "yaml":
-        args.extend(["-o", "yaml"])
-    elif output == "wide":
-        args.extend(["-o", "wide"])
+    _docker_guard("ps")
+    args = [DOCKER, "ps"]
+    if all:
+        args.append("-a")
     return await _run(args, timeout=30)
 
 
 @mcp.tool()
-async def kubectl_describe(
-    resource_type: str,
-    name: str | None = None,
-    namespace: str | None = None,
-) -> str:
-    """Describe a Kubernetes resource — events, status, conditions.
-
-    Args:
-        resource_type: e.g. pod, deployment, statefulset, node, pvc, service.
-        name: Resource name; omit to describe all of that type in namespace.
-        namespace: Namespace. Omit for cluster-scoped or default.
-    """
-    _check_get_type(resource_type)
-    rtype = _resolve_resource(resource_type)
-    args = [K3S, "kubectl", "describe", rtype]
-    if name:
-        args.append(name)
-    if namespace:
-        args.extend(["-n", namespace])
-    return await _run(args, timeout=30)
+async def docker_images() -> str:
+    """List Docker images (`docker images`)."""
+    _docker_guard("images")
+    return await _run([DOCKER, "images"], timeout=30)
 
 
 @mcp.tool()
-async def kubectl_logs(
-    pod_name: str,
-    namespace: str | None = None,
-    container: str | None = None,
-    tail: int = 200,
-    previous: bool = False,
-) -> str:
-    """Fetch logs from a pod/container.
+async def docker_inspect(target: str) -> str:
+    """Inspect a container or image (`docker inspect <container|image>`).
 
     Args:
-        pod_name: Pod name.
-        namespace: Namespace (omit for default).
-        container: Container name (if pod has multiple containers).
-        tail: Number of lines from the end (default 200, max 500).
-        previous: Get logs from previous crashed container.
+        target: Container or image name/id.
     """
+    _docker_guard("inspect")
+    target = target.strip()
+    if not target:
+        raise ValueError("target must be a non-empty container or image name/id")
+    return await _run([DOCKER, "inspect", target], timeout=30)
+
+
+@mcp.tool()
+async def docker_logs(container: str, tail: int = 200) -> str:
+    """Fetch logs from a container (`docker logs --tail N <container>`).
+
+    Args:
+        container: Container name or id.
+        tail: Number of lines from the end (default 200, clamped 1..500).
+    """
+    _docker_guard("logs")
+    container = container.strip()
+    if not container:
+        raise ValueError("container must be a non-empty container name/id")
     tail = min(max(tail, 1), 500)
-    args = [K3S, "kubectl", "logs", pod_name, f"--tail={tail}"]
-    if namespace:
-        args.extend(["-n", namespace])
-    if container:
-        args.extend(["-c", container])
-    if previous:
-        args.append("--previous")
-    return await _run(args, timeout=30)
+    return await _run([DOCKER, "logs", "--tail", str(tail), container], timeout=30)
 
 
 @mcp.tool()
-async def kubectl_events(
-    namespace: str | None = None,
-    all_namespaces: bool = False,
-) -> str:
-    """Get recent Kubernetes events — useful for debugging startup issues.
+async def docker_stats() -> str:
+    """One-shot CPU/memory usage for running containers (`docker stats --no-stream`)."""
+    _docker_guard("stats")
+    return await _run([DOCKER, "stats", "--no-stream"], timeout=30)
 
-    Args:
-        namespace: Filter by namespace.
-        all_namespaces: Show events across all namespaces.
+
+@mcp.tool()
+async def docker_network_ls() -> str:
+    """List Docker networks (`docker network ls`)."""
+    _docker_guard("network ls")
+    return await _run([DOCKER, "network", "ls"], timeout=15)
+
+
+@mcp.tool()
+async def docker_volume_ls() -> str:
+    """List Docker volumes (`docker volume ls`)."""
+    _docker_guard("volume ls")
+    return await _run([DOCKER, "volume", "ls"], timeout=15)
+
+
+@mcp.tool()
+async def docker_compose_ls() -> str:
+    """List Docker Compose projects (`docker compose ls`).
+
+    Returns a graceful error if the `docker compose` plugin is unavailable.
     """
-    args = [K3S, "kubectl", "get", "events", "--sort-by=.metadata.creationTimestamp"]
-    if all_namespaces:
-        args.append("--all-namespaces")
-    elif namespace:
-        args.extend(["-n", namespace])
-    args.extend(["-o", "json"])
-    data = await _run(args, timeout=30)
-    # Parse JSON, truncate to last 100 events, return pretty
+    _docker_guard("compose ls")
     try:
-        events = json.loads(data)
-        items = events.get("items", [])
-        trimmed = dict(events, items=items[-100:])
-        return json.dumps(trimmed, indent=2, ensure_ascii=False)
-    except json.JSONDecodeError:
-        return data
+        return await _run([DOCKER, "compose", "ls"], timeout=30)
+    except RuntimeError as e:
+        return (
+            "docker compose is not available on this host: "
+            f"{e}\n\nInstall the docker-compose plugin to enable this tool."
+        )
 
 
 @mcp.tool()
-async def kubectl_api_resources() -> str:
-    """List all available API resources on the cluster."""
-    return await _run([K3S, "kubectl", "api-resources", "-o", "wide"], timeout=15)
+async def docker_system_df() -> str:
+    """Show Docker disk usage (`docker system df`)."""
+    _docker_guard("system df")
+    return await _run([DOCKER, "system", "df"], timeout=15)
 
 
 @mcp.tool()
-async def kubectl_nodes() -> str:
-    """Get node status (conditions, capacity, allocatable). Useful to check if
-    nodes are Ready and their resource pressure."""
-    return await _run([K3S, "kubectl", "get", "nodes", "-o", "wide"], timeout=15)
-
-
-@mcp.tool()
-async def kubectl_top_pods(
-    namespace: str | None = None,
-    all_namespaces: bool = False,
-) -> str:
-    """Top pods by CPU/memory usage. Requires metrics-server.
-
-    Args:
-        namespace: Limit to namespace.
-        all_namespaces: Across all namespaces.
-    """
-    args = [K3S, "kubectl", "top", "pods"]
-    if all_namespaces:
-        args.append("--all-namespaces")
-    elif namespace:
-        args.extend(["-n", namespace])
-    return await _run(args, timeout=15)
-
-
-@mcp.tool()
-async def kubectl_top_nodes() -> str:
-    """Top nodes by CPU/memory usage. Requires metrics-server."""
-    return await _run([K3S, "kubectl", "top", "nodes"], timeout=15)
+async def docker_status_summary() -> str:
+    """Quick overview: containers (ps -a) + disk usage (system df) + images.
+    Best first tool when debugging slow-starting apps."""
+    _docker_guard("ps")
+    parts = []
+    parts.append("=== CONTAINERS (docker ps -a) ===")
+    parts.append(await _run([DOCKER, "ps", "-a"], timeout=30))
+    parts.append("\n=== DISK USAGE (docker system df) ===")
+    parts.append(await _run([DOCKER, "system", "df"], timeout=15))
+    parts.append("\n=== IMAGES (docker images) ===")
+    parts.append(await _run([DOCKER, "images"], timeout=30))
+    return "\n".join(parts)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -346,22 +242,20 @@ async def kubectl_top_nodes() -> str:
 async def midclt_call(method: str) -> str:
     """Call a read-only TrueNAS API method via midclt.
 
-    Whistlisted methods: apps, charts, kubernetes, system info, pools,
-    network, services, alerts, VMs, catalogs. Verified on 23.10.2.
+    Whitelisted methods: apps, docker, system info, pools, network, services,
+    alerts, VMs, catalogs. Verified on TrueNAS SCALE 25.04.
     Example methods:
-      - chart.release.query    — list all installed app releases
-      - app.config             — app configuration
-      - app.get_instance       — single app detail (needs id arg, use midclt_call_arg)
-      - chart.release.pod_status — pod status for an app (needs release_name arg)
-      - chart.release.events   — app events (needs release_name arg)
-      - kubernetes.status      — k8s cluster status
+      - app.query              — list installed app releases (AppEntry)
+      - app.image.query        — docker images
+      - docker.state           — docker daemon/service state
+      - docker.events          — recent docker events
       - system.info            — TrueNAS system info
       - pool.query             — list storage pools
       - alert.list             — current alerts
       - vm.query               — list VMs
 
     Args:
-        method: The midclt method name (e.g. 'chart.release.query', 'system.info').
+        method: The midclt method name (e.g. 'app.query', 'system.info').
 
     Returns:
         JSON string from midclt.
@@ -416,16 +310,6 @@ async def midclt_call_arg(method: str, args_json: str) -> str:
         return raw
 
 
-@mcp.tool()
-async def pod_status_summary() -> str:
-    """Quick overview: all pods with status, restarts, age. Best first tool
-    when debugging slow-starting apps."""
-    return await _run(
-        [K3S, "kubectl", "get", "pods", "--all-namespaces", "-o", "wide"],
-        timeout=30,
-    )
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Discovery resource
 # ═══════════════════════════════════════════════════════════════════════════
@@ -436,24 +320,26 @@ def help_resource() -> str:
     """Quick reference for available tools."""
     return (
         "# TrueNAS MCP — Read-Only Debugging Tools\n\n"
-        "## k3s Tools\n"
-        "- `kubectl_get` — get pods, deployments, statefulsets, etc.\n"
-        "- `kubectl_describe` — detailed resource status + events\n"
-        "- `kubectl_logs` — container logs (last N lines)\n"
-        "- `kubectl_events` — cluster events (sorted, last 100)\n"
-        "- `kubectl_nodes` — node status\n"
-        "- `kubectl_api_resources` — available resource types\n"
-        "- `kubectl_top_pods` / `kubectl_top_nodes` — resource usage\n"
-        "- `pod_status_summary` — quick all-namespaces pod overview\n\n"
+        "## Docker Tools\n"
+        "- `docker_ps` — list containers (`docker ps -a`)\n"
+        "- `docker_images` — list images\n"
+        "- `docker_inspect` — inspect a container or image\n"
+        "- `docker_logs` — container logs (last N lines)\n"
+        "- `docker_stats` — one-shot CPU/memory usage\n"
+        "- `docker_network_ls` — list networks\n"
+        "- `docker_volume_ls` — list volumes\n"
+        "- `docker_compose_ls` — list compose projects\n"
+        "- `docker_system_df` — disk usage\n"
+        "- `docker_status_summary` — quick containers + disk + images overview\n\n"
         "## TrueNAS Tools (midclt)\n"
         "- `midclt_call` — call a whitelisted TrueNAS API method\n"
         "- `midclt_call_arg` — call with JSON arguments\n\n"
         "## Common Debugging Flow\n"
-        "1. `pod_status_summary` — check pod states\n"
-        "2. `kubectl_events(all_namespaces=True)` — recent events\n"
-        "3. `kubectl_describe` on slow pods — check conditions\n"
-        "4. `kubectl_logs` — container output\n"
-        "5. `midclt_call('kubernetes.status')` — cluster-level info\n"
+        "1. `docker_status_summary` — check container states\n"
+        "2. `docker_logs(container=...)` — container output\n"
+        "3. `docker_inspect(target=...)` — container/image details\n"
+        "4. `midclt_call('app.query')` — app releases\n"
+        "5. `midclt_call('docker.events')` — recent docker events\n"
     )
 
 
@@ -527,8 +413,8 @@ def main() -> None:
     if TokenAuthMiddleware:
         starlette_app.add_middleware(TokenAuthMiddleware)
 
-    print(f"truenas-mcp v0.2.3 starting on http://{host}:{port}{path}", flush=True)
-    print(f"  k3s binary: {K3S}", flush=True)
+    print(f"truenas-mcp v0.3.0 starting on http://{host}:{port}{path}", flush=True)
+    print(f"  docker binary: {DOCKER}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
     config = uvicorn.Config(starlette_app, host=host, port=port, log_level="info")
