@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.1] — 2026-08-17
+
+### Added
+- `install.sh` one-liner installer (`curl | sudo bash`): auto-detects TrueNAS
+  version (`midclt call system.version` → `/etc/version` → `/etc/os-release`),
+  maps it to the correct git branch, installs into a virtualenv, and starts a
+  systemd unit.
+- Version → branch mapping: `25.04.2.x` → `support/25.04.2.6`, `25.04.0`/
+  `25.04.1` → `docker-variant`, `23.x`/`24.x` → `master`; `TNS_REF` env override
+  for unknown versions.
+- Idempotent re-runs, systemd unit backup (`.bak.<timestamp>`) before rewrite,
+  root check, configurable env (`TNS_REF`, `TNS_REPO`, `TNS_VENV`, `MCP_PORT`,
+  `MCP_TOKEN`).
+- README one-liner section with installer environment-variable table.
+
 ## [0.4.0] — 2026-08-17
 
 ### Changed

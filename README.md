@@ -12,6 +12,38 @@ is read-only.
 
 ## Quick Start
 
+### One-liner install (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/a-simple-test-organization/truenas-mcp/support/25.04.2.6/install.sh | sudo bash
+```
+
+The installer auto-detects the TrueNAS version on the host (`midclt call
+system.version` → `/etc/version` → `/etc/os-release`), selects the correct git
+branch, installs the package into a virtualenv, and starts a systemd unit.
+
+To enable authentication, set a token before/with the install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/a-simple-test-organization/truenas-mcp/support/25.04.2.6/install.sh | sudo MCP_TOKEN="***" bash
+```
+
+#### Installer environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TNS_REF` | auto | Git branch/tag to install (auto-mapped from detected TrueNAS version) |
+| `TNS_REPO` | `https://github.com/a-simple-test-organization/truenas-mcp.git` | Git repository URL |
+| `TNS_VENV` | `/opt/mcp` | Virtualenv path |
+| `MCP_PORT` | `38888` | HTTP listen port |
+| `MCP_TOKEN` | (empty = no auth) | Bearer token for authentication |
+
+The installer maps detected versions to branches as follows: `25.04.2.x` →
+`support/25.04.2.6`, `25.04.0`/`25.04.1` → `docker-variant`, `23.x`/`24.x` →
+`master`. Unknown versions require `TNS_REF`.
+
+### Manual install (pip)
+
 ```bash
 # Install
 pip install git+https://github.com/a-simple-test-organization/truenas-mcp.git

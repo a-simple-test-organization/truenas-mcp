@@ -1,6 +1,6 @@
 [project]
 name = "truenas-mcp"
-version = "0.4.0"
+version = "0.4.1"
 description = "Read-only MCP server for TrueNAS SCALE 25.04.2.6 (Fangtooth) — Debian 13 Trixie, Docker + Incus + QEMU/KVM introspection"
 requires-python = ">=3.10"
 dependencies = [

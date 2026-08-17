@@ -431,7 +431,7 @@ def main() -> None:
     if TokenAuthMiddleware:
         starlette_app.add_middleware(TokenAuthMiddleware)
 
-    print(f"truenas-mcp v0.4.0 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.4.1 starting on http://{host}:{port}{path}", flush=True)
     print(f"  docker binary: {DOCKER}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
