@@ -164,8 +164,15 @@ if [[ ! -x "${TNS_VENV}/bin/python" ]]; then
              "Set TNS_VENV to a writable, persistent path (e.g. /root/mcp or a dataset under /mnt)."
     fi
     say "Creating virtualenv at ${TNS_VENV}"
-    python3 -m venv "${TNS_VENV}" \
-        || fail "Failed to create virtualenv at ${TNS_VENV}. Is python3-venv installed?"
+    if ! python3 -m venv "${TNS_VENV}" >/dev/null 2>&1; then
+        # TrueNAS ships Python without ensurepip (no python3-venv package, and
+        # the OS is read-only so `apt install` is not an option). Retry with
+        # --without-pip, then bootstrap pip below.
+        rm -rf "${TNS_VENV}"
+        say "ensurepip unavailable (TrueNAS omits python3-venv); retrying without pip"
+        python3 -m venv --without-pip "${TNS_VENV}" \
+            || fail "Failed to create virtualenv at ${TNS_VENV} (tried with and without pip)."
+    fi
 else
     say "Virtualenv already exists at ${TNS_VENV}"
 fi
@@ -173,11 +180,37 @@ fi
 PYTHON_BIN="${TNS_VENV}/bin/python"
 
 # ---------------------------------------------------------------------------
+# 3.5 Ensure pip is present (bootstrap via get-pip.py if the venv has none)
+# ---------------------------------------------------------------------------
+if ! "${PYTHON_BIN}" -m pip --version >/dev/null 2>&1; then
+    say "Bootstrapping pip via get-pip.py"
+    GETPIP="$(mktemp)"
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py -o "${GETPIP}" \
+        || fail "Failed to download get-pip.py (check network access to bootstrap.pypa.io)."
+    "${PYTHON_BIN}" "${GETPIP}" \
+        || fail "Failed to bootstrap pip inside ${TNS_VENV}."
+    rm -f "${GETPIP}"
+fi
+
+# Ensure a build backend (setuptools + wheel) is present inside the venv. We
+# build with --no-build-isolation below so the install does not depend on pip's
+# isolated build environment (which may require ensurepip on minimal images).
+"${PYTHON_BIN}" -m pip install --upgrade setuptools wheel \
+    || fail "Failed to install setuptools/wheel into ${TNS_VENV}."
+
+# ---------------------------------------------------------------------------
 # 4. Install / upgrade the package from git
 # ---------------------------------------------------------------------------
 say "Installing truenas-mcp from ${TNS_REPO}@${TNS_REF}"
-"${PYTHON_BIN}" -m pip install --upgrade "git+${TNS_REPO}@${TNS_REF}" \
-    || fail "pip install failed for ${TNS_REPO}@${TNS_REF}"
+if command -v git >/dev/null 2>&1; then
+    INSTALL_SRC="git+${TNS_REPO}@${TNS_REF}"
+else
+    # TrueNAS images often omit git; fall back to a GitHub tarball so the
+    # install does not depend on a git binary.
+    INSTALL_SRC="${TNS_REPO%.git}/archive/${TNS_REF}.tar.gz"
+fi
+"${PYTHON_BIN}" -m pip install --upgrade --no-build-isolation "${INSTALL_SRC}" \
+    || fail "pip install failed for ${INSTALL_SRC}"
 
 # ---------------------------------------------------------------------------
 # 4.5 Auth token: reuse an existing one, else auto-generate.

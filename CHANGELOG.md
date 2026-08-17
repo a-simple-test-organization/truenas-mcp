@@ -21,6 +21,13 @@
   installer now verifies the target parent directory is writable before creating
   the venv, and the systemd unit no longer sets `ProtectHome` (so it can read
   the venv under `/root`).
+- Virtualenv creation no longer requires `ensurepip`: TrueNAS ships Python
+  without `python3-venv` (and `apt install` is impossible on the read-only OS),
+  so the installer retries with `--without-pip` and bootstraps pip via
+  `get-pip.py` (which also provides setuptools/wheel for building the package).
+- Package install no longer requires a `git` binary (falls back to a GitHub
+  tarball) and builds with `--no-build-isolation` so it does not depend on pip's
+  isolated build env (which may also require `ensurepip` on minimal images).
 - README one-liner section with installer environment-variable table.
 
 ## [0.4.0] — 2026-08-17
