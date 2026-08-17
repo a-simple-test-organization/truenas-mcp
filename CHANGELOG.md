@@ -13,6 +13,9 @@
 - Idempotent re-runs, systemd unit backup (`.bak.<timestamp>`) before rewrite,
   root check, configurable env (`TNS_REF`, `TNS_REPO`, `TNS_VENV`, `MCP_PORT`,
   `MCP_TOKEN`).
+- Auth token auto-generation: if `MCP_TOKEN` is unset and there is no existing
+  install, a random token is generated and printed at the end; a re-run reuses
+  the existing token from the installed unit.
 - README one-liner section with installer environment-variable table.
 
 ## [0.4.0] — 2026-08-17

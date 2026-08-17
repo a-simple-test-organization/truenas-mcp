@@ -14,7 +14,9 @@
 #   TNS_REPO   - git repository URL (default: https://github.com/a-simple-test-organization/truenas-mcp.git)
 #   TNS_VENV   - virtualenv path (default: /opt/mcp)
 #   MCP_PORT   - HTTP listen port (default: 38888)
-#   MCP_TOKEN  - Bearer token; empty = auth disabled (default: empty)
+#   MCP_TOKEN  - Bearer token. If unset, an existing token is reused from the
+#                installed unit when present; otherwise a new one is generated
+#                and printed at the end of the install.
 
 set -euo pipefail
 
@@ -165,6 +167,29 @@ say "Installing truenas-mcp from ${TNS_REPO}@${TNS_REF}"
     || fail "pip install failed for ${TNS_REPO}@${TNS_REF}"
 
 # ---------------------------------------------------------------------------
+# 4.5 Auth token: reuse an existing one, else auto-generate.
+#     Only generate a fresh token when none is provided AND there is no
+#     existing install, so a re-run never rotates the token out from under
+#     already-connected clients.
+# ---------------------------------------------------------------------------
+if [[ -z "${MCP_TOKEN}" ]]; then
+    if [[ -f "${UNIT_DST}" ]]; then
+        MCP_TOKEN="$(sed -n 's/^Environment=MCP_TOKEN=//p' "${UNIT_DST}" | head -n 1)"
+        if [[ -n "${MCP_TOKEN}" ]]; then
+            say "Reusing existing auth token from ${UNIT_DST}"
+        fi
+    fi
+    if [[ -z "${MCP_TOKEN}" ]]; then
+        if command -v openssl >/dev/null 2>&1; then
+            MCP_TOKEN="$(openssl rand -hex 32)"
+        else
+            MCP_TOKEN="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+        fi
+        say "No token provided and no existing install — generated a new auth token."
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # 5. Install the systemd unit
 # ---------------------------------------------------------------------------
 if [[ -f "${UNIT_DST}" ]]; then
@@ -284,7 +309,6 @@ cat <<EOF
    Health URL       : http://${HOST_IP}:${MCP_PORT}/health
    MCP endpoint     : http://${HOST_IP}:${MCP_PORT}/mcp
    Auth             : $([ -n "${MCP_TOKEN}" ] && echo "enabled (MCP_TOKEN set)" || echo "DISABLED (MCP_TOKEN empty)")
-
  Useful commands:
    journalctl -u ${UNIT_NAME} -f
    systemctl status ${UNIT_NAME}
@@ -295,6 +319,18 @@ EOF
 if [[ "${ACTIVE_STATE}" != "active" ]]; then
     say "Service did not reach 'active' state; check logs with: journalctl -u ${UNIT_NAME} -n 50"
     exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# 9. Final token disclosure
+# ---------------------------------------------------------------------------
+if [[ -n "${MCP_TOKEN}" ]]; then
+    echo ""
+    echo "Your MCP access token (Bearer) — save it now:"
+    echo "  ${MCP_TOKEN}"
+    echo ""
+    echo "It is not stored anywhere by this installer except inside the systemd"
+    echo "unit (${UNIT_DST})."
 fi
 
 say "Done."
