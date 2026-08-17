@@ -12,7 +12,8 @@
 # Environment (defaults shown; existing values are NOT overwritten):
 #   TNS_REF    - git ref to install (auto-detected when unset)
 #   TNS_REPO   - git repository URL (default: https://github.com/a-simple-test-organization/truenas-mcp.git)
-#   TNS_VENV   - virtualenv path (default: /opt/mcp)
+#   TNS_VENV   - virtualenv path (default: /root/mcp; TrueNAS OS is read-only,
+#                so it must live on a writable, persistent location)
 #   MCP_PORT   - HTTP listen port (default: 38888)
 #   MCP_TOKEN  - Bearer token. If unset, an existing token is reused from the
 #                installed unit when present; otherwise a new one is generated
@@ -24,7 +25,7 @@ set -euo pipefail
 # Defaults (only set when the caller has not already exported them)
 # ---------------------------------------------------------------------------
 TNS_REPO="${TNS_REPO:-https://github.com/a-simple-test-organization/truenas-mcp.git}"
-TNS_VENV="${TNS_VENV:-/opt/mcp}"
+TNS_VENV="${TNS_VENV:-/root/mcp}"
 MCP_PORT="${MCP_PORT:-38888}"
 MCP_TOKEN="${MCP_TOKEN:-}"
 
@@ -150,6 +151,18 @@ fi
 # 3. Create virtualenv if missing
 # ---------------------------------------------------------------------------
 if [[ ! -x "${TNS_VENV}/bin/python" ]]; then
+    # TrueNAS SCALE mounts the OS (/, /usr, /opt) read-only, so the venv must
+    # live on a writable, persistent location. Fail early with a clear message
+    # instead of a cryptic venv error.
+    VENV_PARENT="$(dirname "${TNS_VENV}")"
+    if [[ ! -d "${VENV_PARENT}" ]]; then
+        fail "Parent directory '${VENV_PARENT}' does not exist." \
+             "Set TNS_VENV to a writable, persistent path (e.g. /root/mcp or a dataset under /mnt)."
+    fi
+    if [[ ! -w "${VENV_PARENT}" ]]; then
+        fail "Parent directory '${VENV_PARENT}' is read-only (TrueNAS OS filesystem is read-only)." \
+             "Set TNS_VENV to a writable, persistent path (e.g. /root/mcp or a dataset under /mnt)."
+    fi
     say "Creating virtualenv at ${TNS_VENV}"
     python3 -m venv "${TNS_VENV}" \
         || fail "Failed to create virtualenv at ${TNS_VENV}. Is python3-venv installed?"
@@ -263,7 +276,6 @@ SyslogIdentifier=truenas-mcp
 
 # Security: restrict but allow docker/midclt
 NoNewPrivileges=yes
-ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

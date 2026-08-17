@@ -16,6 +16,11 @@
 - Auth token auto-generation: if `MCP_TOKEN` is unset and there is no existing
   install, a random token is generated and printed at the end; a re-run reuses
   the existing token from the installed unit.
+- Default virtualenv path changed to `/root/mcp`: TrueNAS SCALE mounts the OS
+  (`/`, `/usr`, `/opt`) read-only, so `/opt/mcp` fails with `[Errno 30]`. The
+  installer now verifies the target parent directory is writable before creating
+  the venv, and the systemd unit no longer sets `ProtectHome` (so it can read
+  the venv under `/root`).
 - README one-liner section with installer environment-variable table.
 
 ## [0.4.0] — 2026-08-17

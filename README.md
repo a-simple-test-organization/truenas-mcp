@@ -36,7 +36,7 @@ curl -fsSL https://raw.githubusercontent.com/a-simple-test-organization/truenas-
 |----------|---------|-------------|
 | `TNS_REF` | auto | Git branch/tag to install (auto-mapped from detected TrueNAS version) |
 | `TNS_REPO` | `https://github.com/a-simple-test-organization/truenas-mcp.git` | Git repository URL |
-| `TNS_VENV` | `/opt/mcp` | Virtualenv path |
+| `TNS_VENV` | `/root/mcp` | Virtualenv path (must be writable; TrueNAS OS is read-only) |
 | `MCP_PORT` | `38888` | HTTP listen port |
 | `MCP_TOKEN` | auto (generated if unset & no existing install; printed at end) | Bearer token for authentication |
 

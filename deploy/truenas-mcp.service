@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/opt/mcp/bin/python -m truenas_mcp.server
+ExecStart=/root/mcp/bin/python -m truenas_mcp.server
 Environment=PYTHONUNBUFFERED=1
 Environment=MCP_HOST=0.0.0.0
 Environment=MCP_PORT=38888
@@ -19,7 +19,6 @@ SyslogIdentifier=truenas-mcp
 
 # Security: restrict but allow docker/midclt
 NoNewPrivileges=yes
-ProtectHome=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes
