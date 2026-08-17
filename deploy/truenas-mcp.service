@@ -1,5 +1,5 @@
 [Unit]
-Description=TrueNAS MCP Server — read-only Docker & TrueNAS API debug tools
+Description=TrueNAS MCP Server — read-only Docker & TrueNAS API debug tools (TrueNAS SCALE 25.04.2.6 / Debian 13)
 After=network-online.target
 Wants=network-online.target
 

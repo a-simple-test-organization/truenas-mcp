@@ -1,4 +1,6 @@
-# Dockerfile
+# Dockerfile — build the MCP server (read-only debug tools)
+# Target: TrueNAS SCALE 25.04.2.6 (Fangtooth) / Debian 13 "Trixie";
+# docker CLI and midclt are mounted from the host at runtime.
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

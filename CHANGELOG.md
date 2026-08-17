@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0] — 2026-08-17
+
+### Changed
+- New target: TrueNAS SCALE 25.04.2.6 (Fangtooth), a maintenance release
+  (NAS-138229: extend revert NFS limits on API 25.04.1/25.04.2); toolchain
+  identical to 25.04.2.
+- Explicit base-OS target: GNU/Linux Debian 13 "Trixie", Linux kernel 6.12,
+  OpenZFS 2.3.x; FreeBSD base removed, CORE/SCALE merged into one Linux line.
+- Updated `ALLOWED_MIDCLT` whitelist for 25.04.2.6:
+  - Added: `container.query`, `container.image.query`, `container.state`
+    (Incus/LXC containers), `vm.query` (QEMU/KVM, reintroduced in 25.04.2)
+  - Kept: `app.query`, `app.image.query`, `docker.state`, `docker.events`,
+    system/pool/network/service/alert/catalog methods
+  - Confirmed removed: all `chart.release.*`, all `kubernetes.*`, `app.config`,
+    `app.available_versions`, `app.get_instance`
+- `midclt` binary resolution: added `/usr/sbin/midclt` fallback for Debian 13
+  layouts (kept `/usr/local/bin`, `/usr/bin`, `/usr/local/sbin`).
+- Docstrings/comments updated to reference 25.04.2.6, Debian 13, Docker + Incus
+  + QEMU/KVM (k3s removed).
+
 ## [0.3.0] — 2026-08-13
 
 ### Changed

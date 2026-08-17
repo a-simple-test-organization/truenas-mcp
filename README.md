@@ -5,7 +5,10 @@ Read-only MCP server for TrueNAS Scale debugging. Runs directly on TrueNAS and p
 - **Docker tools** — `docker ps/images/inspect/logs/stats/network/volume/compose/system df` wrapped as MCP tools
 - **TrueNAS API** — whitelisted `midclt call` methods for system info, apps, docker, pools
 
-Targets TrueNAS SCALE 25.04+ (native Docker, k3s removed). No destructive operations. Every tool is read-only.
+Targets TrueNAS SCALE 25.04.2.6 (Fangtooth) — Debian 13 "Trixie", kernel 6.12,
+OpenZFS 2.3, with Docker (apps) + Incus (LXC containers) + QEMU/KVM
+(classic virtualization). k3s removed. No destructive operations. Every tool
+is read-only.
 
 ## Quick Start
 

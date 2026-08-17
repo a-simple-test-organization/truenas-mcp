@@ -1,7 +1,7 @@
 [project]
 name = "truenas-mcp"
-version = "0.3.0"
-description = "Read-only MCP server for TrueNAS Scale — Docker and system introspection (TrueNAS SCALE 25.04+)"
+version = "0.4.0"
+description = "Read-only MCP server for TrueNAS SCALE 25.04.2.6 (Fangtooth) — Debian 13 Trixie, Docker + Incus + QEMU/KVM introspection"
 requires-python = ">=3.10"
 dependencies = [
     "mcp[cli]>=2.0.0",

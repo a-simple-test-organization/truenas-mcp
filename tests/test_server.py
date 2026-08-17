@@ -109,6 +109,9 @@ class TestWhitelists:
             "app.image.query",
             "docker.state",
             "docker.events",
+            "container.query",
+            "container.image.query",
+            "container.state",
             "system.info",
             "system.version",
             "system.cpu_info",
@@ -123,6 +126,12 @@ class TestWhitelists:
         }
         missing = must_have - ALLOWED_MIDCLT
         assert not missing, f"Missing essential methods: {missing}"
+
+    def test_midclt_whitelist_25_04_2_6_containers_and_vms(self):
+        """25.04.2.6 introduces Incus containers and reintroduces QEMU/KVM VMs."""
+        for m in ("container.query", "container.image.query",
+                  "container.state", "vm.query"):
+            assert m in ALLOWED_MIDCLT, f"Expected {m} in whitelist"
 
     def test_midclt_whitelist_removed_obsolete(self):
         removed = {

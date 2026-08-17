@@ -1,9 +1,16 @@
 """
-Read-only MCP server for TrueNAS Scale.
+Read-only MCP server for TrueNAS SCALE 25.04.2.6 (Fangtooth).
 
 Runs locally on TrueNAS; uses the native `docker` CLI and `midclt call`
 (no auth needed). Every tool is read-only — no run/rm/pull/exec, no
 mutating midclt methods.
+
+Target environment:
+- Base OS: GNU/Linux Debian 13 "Trixie", Linux kernel 6.12, OpenZFS 2.3.x
+  (FreeBSD base removed; CORE and SCALE merged into a single Linux line).
+- Virtualization/containers: Docker (apps) + Incus (LXC "Containers") +
+  QEMU/KVM (classic virtualization, reintroduced in 25.04.2).
+- k3s / kubernetes fully removed — no kubectl tools here.
 """
 from __future__ import annotations
 
@@ -33,9 +40,12 @@ DOCKER = _find_binary(
     "docker", "DOCKER_BIN",
     ["/usr/bin/docker", "/usr/local/bin/docker", "/usr/local/sbin/docker"]
 )
+# midclt lives under /usr/local/bin on TrueNAS (Debian 13 base); include
+# /usr/bin and /usr/sbin as reasonable fallbacks for other Debian layouts.
 MIDCLT = _find_binary(
     "midclt", "MIDCLT_BIN",
-    ["/usr/local/bin/midclt", "/usr/bin/midclt", "/usr/local/sbin/midclt"]
+    ["/usr/local/bin/midclt", "/usr/bin/midclt", "/usr/sbin/midclt",
+     "/usr/local/sbin/midclt"]
 )
 
 # Read-only docker subcommands we are willing to run. Anything else (run, rm,
@@ -66,7 +76,7 @@ def _docker_guard(subcommand: str) -> None:
         )
 
 
-# whitelist of midclt calls — verified working on TrueNAS SCALE 25.04
+# whitelist of midclt calls — verified working on TrueNAS SCALE 25.04.2.6
 ALLOWED_MIDCLT = frozenset({
     # Apps (Docker-backed in 25.04)
     "app.query",                 # list installed app releases (AppEntry)
@@ -74,6 +84,10 @@ ALLOWED_MIDCLT = frozenset({
     # Docker
     "docker.state",              # docker daemon / service state
     "docker.events",             # recent docker events
+    # Containers (Incus/LXC, introduced in 25.04)
+    "container.query",           # list LXC containers
+    "container.image.query",     # list container (Incus) images
+    "container.state",           # container runtime state
     # System
     "system.info",
     "system.version",
@@ -88,7 +102,7 @@ ALLOWED_MIDCLT = frozenset({
     "service.query",
     # Alerts
     "alert.list",
-    # VMs
+    # VMs (QEMU/KVM, reintroduced in 25.04.2)
     "vm.query",
     # Catalogs
     "catalog.query",
@@ -242,17 +256,21 @@ async def docker_status_summary() -> str:
 async def midclt_call(method: str) -> str:
     """Call a read-only TrueNAS API method via midclt.
 
-    Whitelisted methods: apps, docker, system info, pools, network, services,
-    alerts, VMs, catalogs. Verified on TrueNAS SCALE 25.04.
+    Whitelisted methods: apps, docker, containers (Incus/LXC), system info,
+    pools, network, services, alerts, VMs (QEMU/KVM), catalogs.
+    Verified on TrueNAS SCALE 25.04.2.6.
     Example methods:
       - app.query              — list installed app releases (AppEntry)
       - app.image.query        — docker images
       - docker.state           — docker daemon/service state
       - docker.events          — recent docker events
+      - container.query        — list LXC containers
+      - container.image.query  — list container (Incus) images
+      - container.state        — container runtime state
       - system.info            — TrueNAS system info
       - pool.query             — list storage pools
       - alert.list             — current alerts
-      - vm.query               — list VMs
+      - vm.query               — list VMs (QEMU/KVM)
 
     Args:
         method: The midclt method name (e.g. 'app.query', 'system.info').
@@ -413,7 +431,7 @@ def main() -> None:
     if TokenAuthMiddleware:
         starlette_app.add_middleware(TokenAuthMiddleware)
 
-    print(f"truenas-mcp v0.3.0 starting on http://{host}:{port}{path}", flush=True)
+    print(f"truenas-mcp v0.4.0 starting on http://{host}:{port}{path}", flush=True)
     print(f"  docker binary: {DOCKER}", flush=True)
     print(f"  midclt binary: {MIDCLT}", flush=True)
 
